@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 环境变量（包含敏感凭据）
+.env
+
+# 本地状态
+sent_signals.json
+state/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# OpenClaw 运行时
+.opencli/

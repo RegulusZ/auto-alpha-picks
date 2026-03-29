@@ -1,0 +1,16 @@
+{
+  "site": "seekingalpha",
+  "target_url": "https://seekingalpha.com/alpha-picks/picks/current",
+  "final_url": "https://seekingalpha.com/alpha-picks/picks/current",
+  "title": "当前持仓 | Alpha精选 | Seeking Alpha",
+  "framework": {
+    "nextjs": false,
+    "nuxt": false,
+    "react": false,
+    "vue2": false,
+    "vue3": false
+  },
+  "stores": [],
+  "top_strategy": "public",
+  "explored_at": "2026-03-29T10:21:02.113Z"
+}
