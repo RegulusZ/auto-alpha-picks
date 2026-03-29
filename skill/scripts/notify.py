@@ -15,10 +15,22 @@ import time
 import urllib.request
 from pathlib import Path
 
-# 确保 scripts/ 在 Python 路径中（realpath 处理 symlink）
-_SCRIPT_DIR = Path(os.path.realpath(__file__)).parent
+# 确保 scripts/ 在 Python 路径中
+# 使用 resolve() 而非 realpath，避免跟随 symlink 导致路径偏移
+_SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
+
+# 加载 .env 文件（skill 根目录，即 scripts 的父目录）
+_SKILL_DIR = _SCRIPT_DIR.parent
+_ENV_FILE = _SKILL_DIR / ".env"
+if _ENV_FILE.exists():
+    for line in _ENV_FILE.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k, v)
+
 from logger import logger
 
 from dataclasses import dataclass, asdict

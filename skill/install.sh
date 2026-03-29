@@ -19,11 +19,14 @@ if [ ! -d "$SKILLS_DIR" ]; then
     exit 1
 fi
 
-# 2. 软链接或确认已链接
+# 2. 建立软链接（删除旧的重新创建）
 if [ -L "$TARGET" ]; then
     echo "✅ Skill 已链接: $TARGET"
 elif [ -d "$TARGET" ]; then
-    echo "⚠️  目录已存在（非软链接），跳过"
+    echo "⚠️  目录已存在，删除后重新链接..."
+    rm -rf "$TARGET"
+    ln -s "$SKILL_DIR" "$TARGET"
+    echo "✅ 软链接已创建: $TARGET"
 else
     ln -s "$SKILL_DIR" "$TARGET"
     echo "✅ 软链接已创建: $TARGET"
