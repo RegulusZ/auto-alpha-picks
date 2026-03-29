@@ -19,5 +19,5 @@ state/
 .idea/
 .vscode/
 
-# OpenClaw 运行时
+# OpenClaw 运行时（每个机器不同，不应同步）
 .opencli/

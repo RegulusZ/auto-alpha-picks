@@ -1,0 +1,9 @@
+# OpenClaw 运行时（每个机器不同）
+.opencli/
+
+# IDE
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
