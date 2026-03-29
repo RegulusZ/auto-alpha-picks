@@ -13,9 +13,16 @@ import os
 import sys
 import time
 import urllib.request
+from pathlib import Path
+
+# 确保 scripts/ 在 Python 路径中（realpath 处理 symlink）
+_SCRIPT_DIR = Path(os.path.realpath(__file__)).parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+from logger import logger
+
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 
@@ -256,6 +263,9 @@ def notify_signal(signal: str, ticker: str) -> bool:
     发送 Alpha Picks 交易信号通知。
     返回 True 表示发送成功（已记录），False 表示失败或被去重跳过。
     """
+    key = f"{ticker}:{signal}"
+    logger.info("notify_signal 调用 | signal=%s | ticker=%s", signal, ticker)
+
     emoji = "🟢" if signal == "BUY" else "🔴" if signal == "SELL" else "🟡"
     content = f"📈 **Alpha Picks**\n{emoji} **{signal}** {ticker}"
 
@@ -265,6 +275,9 @@ def notify_signal(signal: str, ticker: str) -> bool:
     if ok:
         store = SentSignalsStore(get_state_file())
         store.record(ticker, signal)
+        logger.info("微信推送成功 | key=%s", key)
+    else:
+        logger.error("微信推送失败 | key=%s", key)
 
     return ok
 
@@ -291,6 +304,7 @@ def main():
 
     if not force and store.is_sent(ticker, signal):
         print(f"[去重] {key} 已发送过，跳过")
+        logger.warning("去重跳过 | key=%s", key)
         return
 
     ok = notify_signal(signal, ticker)

@@ -20,8 +20,14 @@ import os
 from pathlib import Path
 from email.header import decode_header
 
+# 确保 scripts/ 在 Python 路径中（realpath 处理 symlink）
+_SCRIPT_DIR = Path(os.path.realpath(__file__)).parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+from logger import logger
+
 # 加载 .env 文件
-ENV_FILE = Path(__file__).parent.parent / ".env"
+ENV_FILE = _SCRIPT_DIR.parent / ".env"
 if ENV_FILE.exists():
     for line in ENV_FILE.read_text().splitlines():
         line = line.strip()
@@ -124,13 +130,18 @@ def main():
         if arg.startswith("--email-id"):
             target_id = arg.split("=", 1)[1] if "=" in arg else None
 
+    logger.info("fetch.py 调用 | email_id=%s", target_id or "最新")
+
     mid, msg = fetch_email(target_id)
     if not mid or not msg:
         print("未找到 Seeking Alpha 邮件")
+        logger.warning("未找到 SA 邮件")
         return
 
     subject = decode_str(msg.get("Subject", ""))
     body = strip_html(get_body(msg))
+
+    logger.info("获取邮件成功 | id=%s | subject=%s", mid, subject)
 
     print(f"邮件 ID: {mid}")
     print(f"邮件主题: {subject}")
