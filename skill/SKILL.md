@@ -57,13 +57,20 @@ python3 test_signal.py
 | `notify.py` | WeChat Webhook 发送 |
 | `config.py` | 环境变量 + `.env` 加载 |
 
+## 去重机制
+
+每次推送后以 `{ticker}:{signal}` 为 key 写入 `~/.openclaw/workspace/seeking-alpha-picks/sent_signals.json`，已记录过的信号自动跳过（幂等）。
+
 ## 测试
 
 ```bash
-# 自动找最近信号，有则推送
+# 正常检查（会去重）
 python3 test_signal.py
 
-# 指定邮件 ID 测试
+# 强制推送（绕过去重，用于重新测试）
+python3 test_signal.py --force
+
+# 指定邮件 ID 测试（绕过去重）
 python3 test_signal.py --email-id=40   # SELL POWL
 python3 test_signal.py --email-id=45   # BUY LITE
 python3 test_signal.py --email-id=50   # Market Recap → 无信号

@@ -166,12 +166,50 @@ def send_notification(cfg: Config, sig: str, ticker: str):
     return send_wecom_markdown(cfg.wecom_webhook, content)
 
 
+class SentSignalsStore:
+    """幂等去重：基于 {ticker}:{signal} key 防止重复通知"""
+
+    def __init__(self, state_file: str):
+        self.state_file = Path(state_file)
+        self._data: dict = {}
+        self._load()
+
+    def _load(self) -> None:
+        if self.state_file.exists():
+            try:
+                self._data = json.loads(self.state_file.read_text())
+            except Exception:
+                self._data = {}
+
+    def _save(self) -> None:
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        self.state_file.write_text(json.dumps(self._data, indent=2, ensure_ascii=False))
+
+    def is_sent(self, ticker: str, signal: str) -> bool:
+        return f"{ticker}:{signal}" in self._data
+
+    def record(self, ticker: str, signal: str, subject: str) -> None:
+        key = f"{ticker}:{signal}"
+        self._data[key] = {
+            "ticker": ticker,
+            "signal": signal,
+            "subject": subject,
+            "sent_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        self._save()
+
+
 def main():
     cfg = Config.from_env()
+    store = SentSignalsStore(Path(cfg.state_dir) / "sent_signals.json")
+
     target_id = None
+    force = False
     for arg in sys.argv[1:]:
         if arg.startswith("--email-id"):
             target_id = int(arg.split("=", 1)[1]) if "=" in arg else None
+        if arg == "--force":
+            force = True
 
     print(f"[{time.strftime('%H:%M:%S')}] 开始检查...")
 
@@ -195,8 +233,17 @@ def main():
         send_wecom_markdown(cfg.wecom_webhook, "📈 **Alpha Picks**\n暂无新交易信号")
         return
 
+    key = f"{ticker}:{sig}"
+    if not force and store.is_sent(ticker, sig):
+        print(f"[去重] {key} 已通知过，跳过")
+        return
+
     ok = send_notification(cfg, sig, ticker)
-    print(f"微信推送: {'✅ 成功' if ok else '❌ 失败'}")
+    if ok:
+        store.record(ticker, sig, subject)
+        print(f"微信推送: ✅ 成功（已记录 {key}）")
+    else:
+        print(f"微信推送: ❌ 失败（未记录）")
 
 
 if __name__ == "__main__":
