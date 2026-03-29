@@ -2,16 +2,21 @@
 
 ## 项目结构
 
+遵循 OpenClaw 官方 skill 格式：
+
 ```
 auto-alpha-picks/
-└── skill/              ← 源码仓库根目录
-    ├── test_signal.py  ← 生产入口
-    ├── poll.py         ← 旧版参考
-    ├── notify.py       ← 微信发送
-    ├── config.py       ← .env 加载
-    ├── SKILL.md        ← OpenClaw skill manifest
-    ├── install.sh      ← 部署脚本
-    └── .env.example    ← 环境变量模板
+└── skill/                  ← 源码仓库根目录
+    ├── SKILL.md            ← OpenClaw skill manifest（必需）
+    ├── install.sh          ← 部署脚本
+    ├── .env.example        ← 环境变量模板
+    └── scripts/            ← 可执行脚本
+        ├── test_signal.py  ← 生产入口
+        ├── poll.py         ← 旧版参考
+        ├── notify.py       ← 企业微信 Webhook
+        └── config.py       ← .env 加载
+    └── references/         ← 文档
+        └── README.md       ← 使用说明
 ```
 
 ## 部署流程
@@ -31,12 +36,12 @@ cp -r skill ~/.openclaw/skills/seeking-alpha-picks
 
 ```bash
 cd ~/.openclaw/skills/seeking-alpha-picks
-python3 test_signal.py
+python3 scripts/test_signal.py
 ```
 
 ## 开发流程
 
-- 修改源码在 `skill/` 目录
+- 修改源码在 `skill/scripts/` 目录
 - 测试通过后 `./install.sh` 部署
 - 验证用 `--email-id` 指定邮件 ID：
   - `--email-id=40` → SELL POWL
@@ -49,3 +54,4 @@ python3 test_signal.py
 - LLM 判断：`claude -p --model haiku --output-format json`
 - Webhook：`--output-format json` 输出需 `envelope.get("result")` 解包
 - .env：`test_signal.py` 启动时自动加载同目录 `.env`
+- 去重：`SentSignalsStore` 基于 `{ticker}:{signal}` key 幂等推送
