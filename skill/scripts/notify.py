@@ -1,11 +1,21 @@
 """
 企业微信机器人通知发送模块
-支持 markdown 格式卡片消息
+
+支持:
+1. Python 导入调用: notify_signal(), send_wecom_markdown()
+2. 命令行调用（agent 使用）:
+     python3 scripts/notify.py --signal=BUY --ticker=LITE
+     python3 scripts/notify.py --signal=SELL --ticker=POWL
+     python3 scripts/notify.py --signal=BUY --ticker=FN --force  # 强制发送（绕过去重）
 """
 import json
+import os
+import sys
+import time
 import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 
@@ -188,3 +198,107 @@ def notify_batch(webhook_url: str, picks: list[AlphaPick],
         print(f"[NOTIFY] 发送成功")
     else:
         print(f"[NOTIFY] 发送失败")
+
+
+# ---------------------------------------------------------------------------
+# 信号通知（agent 使用）
+# ---------------------------------------------------------------------------
+
+def get_webhook() -> str:
+    url = os.environ.get("SACP_WECOM_WEBHOOK")
+    if not url:
+        raise ValueError("缺少 SACP_WECOM_WEBHOOK 环境变量")
+    return url
+
+
+def get_state_file() -> Path:
+    base = os.environ.get(
+        "SACP_STATE_DIR",
+        os.path.expanduser("~/.openclaw/workspace/seeking-alpha-picks")
+    )
+    return Path(base) / "sent_signals.json"
+
+
+class SentSignalsStore:
+    """幂等去重：基于 {ticker}:{signal} key 防止重复通知"""
+
+    def __init__(self, state_file: Path):
+        self.state_file = state_file
+        self._data: dict = {}
+        self._load()
+
+    def _load(self) -> None:
+        if self.state_file.exists():
+            try:
+                self._data = json.loads(self.state_file.read_text())
+            except Exception:
+                self._data = {}
+
+    def _save(self) -> None:
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        self.state_file.write_text(json.dumps(self._data, indent=2, ensure_ascii=False))
+
+    def is_sent(self, ticker: str, signal: str) -> bool:
+        return f"{ticker}:{signal}" in self._data
+
+    def record(self, ticker: str, signal: str) -> None:
+        key = f"{ticker}:{signal}"
+        self._data[key] = {
+            "ticker": ticker,
+            "signal": signal,
+            "sent_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        self._save()
+
+
+def notify_signal(signal: str, ticker: str) -> bool:
+    """
+    发送 Alpha Picks 交易信号通知。
+    返回 True 表示发送成功（已记录），False 表示失败或被去重跳过。
+    """
+    emoji = "🟢" if signal == "BUY" else "🔴" if signal == "SELL" else "🟡"
+    content = f"📈 **Alpha Picks**\n{emoji} **{signal}** {ticker}"
+
+    webhook = get_webhook()
+    ok = send_wecom_markdown(webhook, content)
+
+    if ok:
+        store = SentSignalsStore(get_state_file())
+        store.record(ticker, signal)
+
+    return ok
+
+
+def main():
+    signal = None
+    ticker = None
+    force = False
+
+    for arg in sys.argv[1:]:
+        if arg.startswith("--signal="):
+            signal = arg.split("=", 1)[1].upper()
+        elif arg.startswith("--ticker="):
+            ticker = arg.split("=", 1)[1].upper()
+        elif arg == "--force":
+            force = True
+
+    if not signal or not ticker:
+        print("用法: python3 notify.py --signal=BUY --ticker=LITE [--force]")
+        sys.exit(1)
+
+    store = SentSignalsStore(get_state_file())
+    key = f"{ticker}:{signal}"
+
+    if not force and store.is_sent(ticker, signal):
+        print(f"[去重] {key} 已发送过，跳过")
+        return
+
+    ok = notify_signal(signal, ticker)
+    if ok:
+        print(f"✅ 微信推送成功（已记录 {key}）")
+    else:
+        print(f"❌ 微信推送失败")
+
+
+if __name__ == "__main__":
+    main()
