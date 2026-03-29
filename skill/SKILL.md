@@ -1,7 +1,7 @@
 ---
 name: seeking-alpha-picks
 description: "监控 Seeking Alpha Alpha Picks 邮件，agent 判断交易信号后推送企业微信通知。"
-version: 5.0.0
+version: 5.1.0
 metadata:
   openclaw:
     requires:
@@ -56,6 +56,7 @@ python3 scripts/notify.py --signal=SELL --ticker=POWL
 |------|------|
 | `fetch.py` | 获取最新 Alpha Picks 邮件内容并打印 |
 | `notify.py` | 发送微信信号通知，支持去重 |
+| `logger.py` | 共享日志模块，记录所有调用 |
 
 ## 微信通知格式
 
@@ -71,6 +72,23 @@ python3 scripts/notify.py --signal=SELL --ticker=POWL
 可用 `--force` 强制重新发送：
 ```bash
 python3 scripts/notify.py --signal=BUY --ticker=LITE --force
+```
+
+## 调用日志
+
+所有脚本调用记录写入 `~/.openclaw/logs/seeking-alpha-picks.log`，用于排查不达预期时定位问题。
+
+日志内容示例：
+```
+2026-03-30 00:00:02  INFO  fetch.py 调用 | email_id=最新
+2026-03-30 00:00:02  INFO  获取邮件成功 | id=50 | subject=Alpha Picks: March 27 Market Recap
+2026-03-30 10:15:33  INFO  notify_signal 调用 | signal=BUY | ticker=LITE
+2026-03-30 10:15:33  INFO  微信推送成功 | key=LITE:BUY
+```
+
+查看实时日志：
+```bash
+tail -f ~/.openclaw/logs/seeking-alpha-picks.log
 ```
 
 ## 测试

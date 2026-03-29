@@ -13,6 +13,7 @@ auto-alpha-picks/
     ├── scripts/
     │   ├── fetch.py        # 获取最新 Alpha Picks 邮件内容
     │   ├── notify.py       # 发送微信信号通知
+    │   ├── logger.py       # 调用日志模块
     │   ├── poll.py         # 旧版参考（已废弃）
     │   └── test_signal.py  # 旧版一体化脚本（已废弃）
     └── references/
@@ -32,6 +33,10 @@ fetch.py → agent LLM 判断 → notify.py → 微信
 ## 去重
 
 `notify.py` 内置 SentSignalsStore，同一 `{ticker}:{signal}` 只通知一次。`--force` 强制重新发送。
+
+## 调用日志
+
+`~/.openclaw/logs/seeking-alpha-picks.log` 记录每次 `fetch.py` / `notify.py` 调用，用于排查不达预期时定位问题。
 
 ## 技术要点
 
