@@ -1,7 +1,7 @@
 ---
 name: seeking-alpha-picks
 description: "监控 Seeking Alpha Alpha Picks 邮件，agent 判断交易信号后推送企业微信通知。"
-version: 5.1.0
+version: 6.0.0
 metadata:
   openclaw:
     requires:
@@ -21,19 +21,23 @@ metadata:
 ## 架构
 
 ```
-fetch.py → agent 用自己的 LLM 判断信号 → notify.py → 微信通知
+fetch.py → agent LLM 判断 → notify.py（可选）→ mark.py → 微信通知
+                              ↓
+                        状态机：已分析邮件不重复拉取，省 token
 ```
 
-agent 负责判断，脚本只负责获取邮件内容和发微信。
+agent 负责判断信号，脚本只负责获取邮件、发通知、记录状态。
 
 ## 使用方式
 
-**第一步：获取最新邮件内容**
+**第一步：获取最新邮件（自动跳过已分析过的）**
 
 ```bash
 cd ~/.openclaw/skills/seeking-alpha-picks
 python3 scripts/fetch.py
 ```
+
+已有新邮件时输出邮件内容；无新邮件时输出 `无新邮件（全部已分析）`。
 
 **第二步：agent 判断是否为交易信号**
 
@@ -47,16 +51,24 @@ python3 scripts/fetch.py
 
 ```bash
 python3 scripts/notify.py --signal=BUY --ticker=LITE
-python3 scripts/notify.py --signal=SELL --ticker=POWL
 ```
+
+**第四步：标记邮件已分析（必须）**
+
+```bash
+python3 scripts/mark.py --email-id=50
+```
+
+`fetch.py` 下次运行时会自动跳过 `email-id` ≤ 50 的邮件，不再重复拉取分析。
 
 ## scripts/ 脚本说明
 
 | 脚本 | 作用 |
 |------|------|
-| `fetch.py` | 获取最新 Alpha Picks 邮件内容并打印 |
+| `fetch.py` | 获取最新未分析邮件；按 email_id 过滤已处理邮件 |
 | `notify.py` | 发送微信信号通知，支持去重 |
-| `logger.py` | 共享日志模块，记录所有调用 |
+| `mark.py` | 标记邮件已分析完毕，更新状态 |
+| `logger.py` | 共享日志模块 |
 
 ## 微信通知格式
 
@@ -67,38 +79,25 @@ python3 scripts/notify.py --signal=SELL --ticker=POWL
 
 ## 去重机制
 
-`notify.py` 会以 `{ticker}:{signal}` 为 key 写入 `~/.openclaw/workspace/seeking-alpha-picks/sent_signals.json`，同一信号组合只通知一次。
-
-可用 `--force` 强制重新发送：
-```bash
-python3 scripts/notify.py --signal=BUY --ticker=LITE --force
-```
+- **邮件去重**：`fetch.py` 按 email_id 跳过已分析邮件（`fetch_state.json`）
+- **通知去重**：`notify.py` 按 `{ticker}:{signal}` 去重（`sent_signals.json`）
 
 ## 调用日志
 
-所有脚本调用记录写入 `~/.openclaw/logs/seeking-alpha-picks.log`，用于排查不达预期时定位问题。
-
-日志内容示例：
-```
-2026-03-30 00:00:02  INFO  fetch.py 调用 | email_id=最新
-2026-03-30 00:00:02  INFO  获取邮件成功 | id=50 | subject=Alpha Picks: March 27 Market Recap
-2026-03-30 10:15:33  INFO  notify_signal 调用 | signal=BUY | ticker=LITE
-2026-03-30 10:15:33  INFO  微信推送成功 | key=LITE:BUY
-```
-
-查看实时日志：
-```bash
-tail -f ~/.openclaw/logs/seeking-alpha-picks.log
-```
+`~/.openclaw/logs/seeking-alpha-picks.log` 记录每次调用，用于排查问题。
 
 ## 测试
 
 ```bash
-# 获取指定邮件内容（用于测试）
-python3 scripts/fetch.py --email-id=40
+# 获取指定邮件（不受状态机影响）
 python3 scripts/fetch.py --email-id=45
 
-# 强制发送通知（绕过去重）
+# 强制获取所有邮件（忽略状态）
+python3 scripts/fetch.py --force
+
+# 重置状态，重新分析所有邮件
+python3 scripts/mark.py --reset
+
+# 强制发送通知
 python3 scripts/notify.py --signal=BUY --ticker=LITE --force
-python3 scripts/notify.py --signal=SELL --ticker=POWL --force
 ```

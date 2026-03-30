@@ -14,6 +14,7 @@ fetch.py — 获取 Seeking Alpha Alpha Picks 最新邮件内容
 """
 import imaplib
 import email
+import json
 import re
 import sys
 import os
@@ -85,7 +86,7 @@ def strip_html(html: str) -> str:
     return re.sub(r'\s+', ' ', ' '.join(meaningful)).strip()
 
 
-def fetch_email(target_id: str = None) -> tuple:
+def fetch_email(target_id: str = None, last_analyzed_id: int = None) -> tuple:
     host = os.environ.get("SACP_IMAP_HOST")
     port = int(os.environ.get("SACP_IMAP_PORT", "993"))
     user = os.environ.get("SACP_IMAP_USER")
@@ -105,6 +106,14 @@ def fetch_email(target_id: str = None) -> tuple:
         _, msg_ids = conn.search(None, 'FROM "subscriptions@seekingalpha.com"')
         mids = [m.decode() for m in msg_ids[0].split()] if msg_ids[0] else []
         mids.sort(key=int, reverse=True)
+
+        # 跳过已分析过的邮件
+        if last_analyzed_id is not None:
+            original_count = len(mids)
+            mids = [m for m in mids if int(m) > last_analyzed_id]
+            skipped = original_count - len(mids)
+            if skipped > 0:
+                logger.info("跳过 %d 封已分析邮件（last_analyzed_id=%d）", skipped, last_analyzed_id)
 
     if not mids:
         conn.logout()
@@ -126,18 +135,44 @@ def fetch_email(target_id: str = None) -> tuple:
     return mid, msg
 
 
+def get_fetch_state() -> dict:
+    base = os.environ.get(
+        "SACP_STATE_DIR",
+        os.path.expanduser("~/.openclaw/workspace/seeking-alpha-picks")
+    )
+    f = Path(base) / "fetch_state.json"
+    if f.exists():
+        try:
+            return json.loads(f.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
 def main():
     target_id = None
+    force = False
     for arg in sys.argv[1:]:
         if arg.startswith("--email-id"):
             target_id = arg.split("=", 1)[1] if "=" in arg else None
+        if arg == "--force":
+            force = True
 
-    logger.info("fetch.py 调用 | email_id=%s", target_id or "最新")
+    # 加载已分析状态（跳过已处理邮件，省 token）
+    state = {} if force else get_fetch_state()
+    last_analyzed_id = state.get("last_analyzed_id")
 
-    mid, msg = fetch_email(target_id)
+    logger.info("fetch.py 调用 | email_id=%s | skip_above=%s",
+                 target_id or "最新", last_analyzed_id)
+
+    mid, msg = fetch_email(target_id, last_analyzed_id)
     if not mid or not msg:
-        print("未找到 Seeking Alpha 邮件")
-        logger.warning("未找到 SA 邮件")
+        if target_id:
+            print("未找到该邮件")
+            logger.warning("未找到邮件 | target_id=%s", target_id)
+        else:
+            print("无新邮件（全部已分析）")
+            logger.info("无新邮件可处理")
         return
 
     subject = decode_str(msg.get("Subject", ""))
@@ -167,11 +202,14 @@ def main():
     print()
     print("【判断后操作】")
     print()
-    print(" 如有 BUY/SELL 信号，调用 notify.py 发送微信通知：")
+    print(" 如有 BUY/SELL 信号，先调用 notify.py，再调用 mark.py 更新状态：")
     print("   python3 scripts/notify.py --signal=BUY --ticker=LITE")
-    print("   python3 scripts/notify.py --signal=SELL --ticker=POWL")
+    print("   python3 scripts/mark.py --email-id={}".format(mid))
     print()
-    print(" 如无交易信号，无需任何操作。")
+    print(" 如无交易信号，直接调用 mark.py 更新状态：")
+    print("   python3 scripts/mark.py --email-id={}".format(mid))
+    print()
+    print("（mark.py 记录已分析过的邮件，下次 fetch.py 自动跳过旧邮件，省 token）")
 
 
 if __name__ == "__main__":
